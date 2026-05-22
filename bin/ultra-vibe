@@ -6,19 +6,29 @@ This is a wrapper script that enables Ultrawork Mode and then
 launches Vibe with the appropriate configuration.
 
 Usage:
-    ultra-vibe [OPTIONS] PROMPT
+    ultra-vibe [OPTIONS] [PROMPT]
+    ultra-vibe [COMMAND]
 
 Options:
     --ultrawork, -U    Enable Ultrawork Mode
     --ulw             Alias for --ultrawork
     --install-agents  Install Ultrawork agent configs and exit
 
-All other options are passed through to Vibe.
+Commands:
+    install           Install agent configurations
+    list-agents       List available specialist agents
+    show-agent NAME   Show details for a specific agent
+    test              Run tests
+    test-keyword-detection
+                    Test keyword detection
+
+If no command is provided, the script passes all arguments to Vibe.
 
 Examples:
-    ultra-vibe --ultrawork "Refactor the codebase"
+    ultra-vibe --ultrawork "ulw: Refactor the codebase"
     ultra-vibe --ulw -p "Implement feature X"
     ultra-vibe --install-agents
+    ultra-vibe list-agents
 """
 
 import argparse
@@ -35,11 +45,12 @@ from ultra_vibe.core.vibe_integration import (
     enable_ultrawork,
     install_agent_configs,
 )
+from ultra_vibe.cli import main as ultra_vibe_cli_main
 
 
 def main():
     """Main entry point."""
-    # Create parser
+    # Create parser for Ultrawork-specific flags
     parser = argparse.ArgumentParser(
         prog="ultra-vibe",
         description="Ultrawork Mode for Mistral Vibe",
@@ -64,20 +75,52 @@ def main():
         help='Install Ultrawork agent configurations and exit',
     )
     
-    # We need to parse known args first to handle Ultrawork flags
-    # Then pass remaining args to Vibe
+    # Parse known args to extract our flags
     args, remaining_args = parser.parse_known_args()
     
-    # Handle install-agents
+    # Handle install-agents flag
     if args.install_agents:
         count = install_agent_configs()
         print(f"Installed {count} Ultrawork agent configurations to ~/.vibe/agents/")
         sys.exit(0)
     
     # Enable Ultrawork if requested
+    ultrawork_was_enabled = False
     if args.ultrawork:
         enable_ultrawork()
         print("Ultrawork Mode enabled ✓")
+        os.environ['VIBE_ULTRAWORK'] = '1'
+        ultrawork_was_enabled = True
+    
+    # Check if remaining args look like a Vibe command or an Ultra Vibe CLI command
+    if remaining_args:
+        # Check if first arg is an Ultra Vibe CLI command
+        cli_commands = ['install', 'list-agents', 'show-agent', 'test', 'test-keyword-detection']
+        if remaining_args[0] in cli_commands:
+            # Run our CLI
+            sys.argv = ['ultra-vibe'] + remaining_args
+            ultra_vibe_cli_main()
+            return
+        
+        # Otherwise, check if first arg is an Ultra Vibe flag
+        ultra_flags = ['--ultrawork', '-U', '--ulw', '--install-agents']
+        if remaining_args[0] in ultra_flags:
+            # These should have been caught by argparse, but handle just in case
+            sys.argv = ['ultra-vibe'] + remaining_args
+            ultra_vibe_cli_main()
+            return
+    
+    # If we get here, pass everything to Vibe
+    # But first, if ultrawork wasn't enabled via flag, check if the prompt contains ulw:
+    if not ultrawork_was_enabled and remaining_args:
+        # Check if any arg contains ulw: or ultrawork:
+        prompt = ' '.join(remaining_args)
+        from ultra_vibe.core.hooks.keyword_detector import detect_ultrawork
+        if detect_ultrawork(prompt):
+            enable_ultrawork()
+            print("Ultrawork Mode auto-enabled (keyword detected) ✓")
+            os.environ['VIBE_ULTRAWORK'] = '1'
+            ultrawork_was_enabled = True
     
     # Check if Vibe is available
     try:
@@ -87,15 +130,9 @@ def main():
         print("Please install Vibe first: pip install mistral-vibe")
         sys.exit(1)
     
-    # Also set environment variable so Vibe knows Ultrawork is enabled
-    if args.ultrawork:
-        os.environ['VIBE_ULTRAWORK'] = '1'
-    
     # Launch Vibe with remaining arguments
     from vibe.cli.entrypoint import main as vibe_main
     
-    # Reconstruct the command line without our flags
-    # But keep the prompt and other Vibe flags
     sys.argv = ['vibe'] + remaining_args
     
     try:

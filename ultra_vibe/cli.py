@@ -6,6 +6,7 @@ Provides command-line interface for managing Ultrawork Mode.
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -137,6 +138,11 @@ def main():
         action="store_true",
         help="Enable verbose logging",
     )
+    parser.add_argument(
+        "prompt",
+        nargs="*",
+        help="Prompt to pass to Vibe (if no subcommand is provided)",
+    )
     
     subparsers = parser.add_subparsers(dest="command", help="Commands")
     
@@ -184,12 +190,67 @@ def main():
         help="Test keyword detection",
     )
     
-    args = parser.parse_args()
+    # Use parse_known_args to handle both our flags and Vibe arguments
+    args, remaining_args = parser.parse_known_args()
     
     # Setup logging
     setup_logging(args.verbose)
     
-    if args.command is None:
+    # Check if a subcommand was provided
+    if args.command is not None:
+        # Handle our CLI commands
+        if args.command == "install":
+            count = install_agents(args.agents_dir, args.output_dir)
+            print(f"\nInstalled {count} agent configurations to {args.output_dir}")
+        
+        elif args.command == "list-agents":
+            list_agents()
+        
+        elif args.command == "show-agent":
+            show_agent(args.name)
+        
+        elif args.command == "test":
+            import pytest
+            sys.exit(pytest.main(["-v", "tests"]))
+        
+        elif args.command == "test-keyword-detection":
+            test_keyword_detection()
+        return
+    
+    # No subcommand - check if we should enable Ultrawork
+    if args.ultrawork:
+        from ultra_vibe.core.vibe_integration import enable_ultrawork
+        enable_ultrawork()
+        print("Ultrawork Mode enabled ✓")
+        os.environ['VIBE_ULTRAWORK'] = '1'
+    
+    # Check if prompt contains ultrawork keywords
+    if remaining_args:
+        prompt = ' '.join(remaining_args)
+        from ultra_vibe.core.hooks.keyword_detector import detect_ultrawork
+        if detect_ultrawork(prompt):
+            if not args.ultrawork:
+                from ultra_vibe.core.vibe_integration import enable_ultrawork
+                enable_ultrawork()
+                print("Ultrawork Mode auto-enabled (keyword detected) ✓")
+                os.environ['VIBE_ULTRAWORK'] = '1'
+    
+    # Pass to Vibe
+    if remaining_args or args.prompt:
+        from vibe.cli.entrypoint import main as vibe_main
+        # Combine prompt from positional and the remaining args
+        vibe_args = remaining_args
+        if args.prompt:
+            vibe_args = args.prompt + remaining_args
+        if not vibe_args:
+            vibe_args = ['--help']
+        sys.argv = ['vibe'] + vibe_args
+        try:
+            vibe_main()
+        except SystemExit as e:
+            sys.exit(e.code)
+        return
+    else:
         parser.print_help()
         return
     

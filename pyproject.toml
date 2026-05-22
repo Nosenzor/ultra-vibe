@@ -58,7 +58,7 @@ test = [
 ]
 
 [project.scripts]
-ultra-vibe = "ultra_vibe.cli:main"
+ultra-vibe = "ultra_vibe.core.vibe_integration:cli_main"
 ultraworks = "ultra_vibe.cli:ultraworks_main"
 
 [project.urls]
