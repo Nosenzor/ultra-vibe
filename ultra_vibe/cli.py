@@ -214,5 +214,47 @@ def main():
         parser.print_help()
 
 
+def ultraworks_main():
+    """
+    Entry point for ultraworks command.
+    
+    This function is called when users run 'ultraworks' command.
+    It enables Ultrawork Mode and runs Vibe programmatically.
+    """
+    import sys
+    import os
+    
+    # Set environment variable so Vibe knows ultrawork is enabled
+    os.environ['VIBE_ULTRAWORK'] = '1'
+    
+    # Enable ultrawork mode - this patches Vibe's internals
+    try:
+        from ultra_vibe.core.vibe_integration import enable_ultrawork
+        enable_ultrawork()
+    except Exception as e:
+        # If patching fails, just continue - ultrawork will be enabled via env var
+        pass
+    
+    # Import and run Vibe's entrypoint
+    try:
+        from vibe.cli.entrypoint import main as vibe_main
+        
+        # Modify sys.argv to replace 'ultraworks' with 'vibe'
+        if len(sys.argv) > 1:
+            sys.argv = ['vibe'] + sys.argv[1:]
+        else:
+            sys.argv = ['vibe', '--help']
+        
+        vibe_main()
+        
+    except ImportError as e:
+        print("Error: Mistral Vibe is not installed.")
+        print("Please install it first: pip install mistral-vibe")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error running ultraworks: {e}")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     main()
