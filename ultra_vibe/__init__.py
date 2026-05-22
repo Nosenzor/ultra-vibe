@@ -23,7 +23,7 @@ from ultra_vibe.core.hooks.model_override import (
     persist_model_override,
 )
 from ultra_vibe.core.ultrawork.protocol import get_ultrawork_system_prompt
-from ultra_vibe.core.ultrawork.agents import AGENT_DEFINITIONS
+from ultra_vibe.core.ultrawork.agents import AGENT_DEFINITIONS, get_agent_definition
 
 __all__ = [
     "__version__",
@@ -43,4 +43,5 @@ __all__ = [
     "get_ultrawork_system_prompt",
     # Agents
     "AGENT_DEFINITIONS",
+    "get_agent_definition",
 ]
