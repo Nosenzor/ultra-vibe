@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""
+Ultra Vibe - Ultrawork Mode for Mistral Vibe.
+
+This is a wrapper script that enables Ultrawork Mode and then
+launches Vibe with the appropriate configuration.
+
+Usage:
+    ultra-vibe [OPTIONS] PROMPT
+
+Options:
+    --ultrawork, -U    Enable Ultrawork Mode
+    --ulw             Alias for --ultrawork
+    --install-agents  Install Ultrawork agent configs and exit
+
+All other options are passed through to Vibe.
+
+Examples:
+    ultra-vibe --ultrawork "Refactor the codebase"
+    ultra-vibe --ulw -p "Implement feature X"
+    ultra-vibe --install-agents
+"""
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+# Add our package to path
+package_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(package_dir))
+
+# Import Ultra Vibe
+from ultra_vibe.core.vibe_integration import (
+    enable_ultrawork,
+    install_agent_configs,
+)
+
+
+def main():
+    """Main entry point."""
+    # Create parser
+    parser = argparse.ArgumentParser(
+        prog="ultra-vibe",
+        description="Ultrawork Mode for Mistral Vibe",
+    )
+    
+    # Add Ultrawork-specific arguments
+    parser.add_argument(
+        '--ultrawork',
+        '-U',
+        action='store_true',
+        help='Enable Ultrawork Mode for autonomous multi-agent execution',
+    )
+    parser.add_argument(
+        '--ulw',
+        action='store_true',
+        dest='ultrawork',
+        help='Alias for --ultrawork',
+    )
+    parser.add_argument(
+        '--install-agents',
+        action='store_true',
+        help='Install Ultrawork agent configurations and exit',
+    )
+    
+    # We need to parse known args first to handle Ultrawork flags
+    # Then pass remaining args to Vibe
+    args, remaining_args = parser.parse_known_args()
+    
+    # Handle install-agents
+    if args.install_agents:
+        count = install_agent_configs()
+        print(f"Installed {count} Ultrawork agent configurations to ~/.vibe/agents/")
+        sys.exit(0)
+    
+    # Enable Ultrawork if requested
+    if args.ultrawork:
+        enable_ultrawork()
+        print("Ultrawork Mode enabled ✓")
+    
+    # Check if Vibe is available
+    try:
+        import vibe
+    except ImportError:
+        print("Error: Mistral Vibe is not installed or not in PATH")
+        print("Please install Vibe first: pip install mistral-vibe")
+        sys.exit(1)
+    
+    # Also set environment variable so Vibe knows Ultrawork is enabled
+    if args.ultrawork:
+        os.environ['VIBE_ULTRAWORK'] = '1'
+    
+    # Launch Vibe with remaining arguments
+    from vibe.cli.entrypoint import main as vibe_main
+    
+    # Reconstruct the command line without our flags
+    # But keep the prompt and other Vibe flags
+    sys.argv = ['vibe'] + remaining_args
+    
+    try:
+        vibe_main()
+    except SystemExit as e:
+        sys.exit(e.code)
+
+
+if __name__ == "__main__":
+    main()
