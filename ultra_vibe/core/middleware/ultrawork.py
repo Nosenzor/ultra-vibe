@@ -196,11 +196,18 @@ class UltraworkModelMiddleware(ConversationMiddleware):
         """
         Override model selection for ultrawork mode.
         """
-        # Check if ultrawork is enabled in metadata
-        # This would be set by UltraworkMiddleware
-        ultrawork_enabled = context.stats.metadata.get('ultrawork_enabled', False)
+        # Check if ultrawork is enabled by detecting keywords in messages
+        messages = context.messages
+        if not messages:
+            return MiddlewareResult()
         
-        if not ultrawork_enabled:
+        # Check the most recent message for ultrawork triggers
+        latest_message = messages[-1]
+        content = latest_message.get('content', '') if isinstance(latest_message, dict) else str(latest_message)
+        
+        # Detect ultrawork mode
+        from ultra_vibe.core.hooks.keyword_detector import detect_ultrawork
+        if not detect_ultrawork(content):
             return MiddlewareResult()
         
         # Get current model config
