@@ -14,6 +14,24 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# Module-level state to share between middleware instances
+_ultrawork_state = {
+    'enabled': False,
+    'hyperplan_enabled': False,
+    'task_id': None,
+    'loop_id': None,
+}
+
+
+def get_ultrawork_state() -> dict:
+    """Get the current ultrawork state."""
+    return _ultrawork_state.copy()
+
+
+def set_ultrawork_state(**kwargs) -> None:
+    """Update the ultrawork state."""
+    _ultrawork_state.update(kwargs)
+
 
 # Runtime imports - try to import from Vibe
 try:
@@ -78,17 +96,16 @@ class UltraworkMiddleware(ConversationMiddleware):
     
     def __init__(self, config: VibeConfig):
         self.config = config
-        self.ultrawork_enabled: bool = False
-        self.hyperplan_enabled: bool = False
-        self.task_id: Optional[str] = None
-        self.loop_id: Optional[str] = None
+        # Use module-level state
         
     def reset(self, reset_reason: str = "STOP") -> None:
         """Reset ultrawork state."""
-        self.ultrawork_enabled = False
-        self.hyperplan_enabled = False
-        self.task_id = None
-        self.loop_id = None
+        set_ultrawork_state(
+            enabled=False,
+            hyperplan_enabled=False,
+            task_id=None,
+            loop_id=None,
+        )
         logger.debug("Ultrawork middleware reset")
     
     def _detect_ultrawork(self, message: str) -> tuple[bool, bool]:
@@ -140,24 +157,30 @@ class UltraworkMiddleware(ConversationMiddleware):
         # Detect ultrawork mode
         is_ultrawork, is_hyperplan = self._detect_ultrawork(content)
         
+        # Check current state from module-level state
+        current_state = get_ultrawork_state()
+        
         # If already in ultrawork mode, maintain it
-        if self.ultrawork_enabled:
+        if current_state['enabled']:
             # But check if we should also enable hyperplan
             if is_hyperplan:
-                self.hyperplan_enabled = True
+                set_ultrawork_state(hyperplan_enabled=True)
             return MiddlewareResult()
         
         # If we detected ultrawork, enable it
         if is_ultrawork:
-            self.ultrawork_enabled = True
-            self.hyperplan_enabled = is_hyperplan
+            set_ultrawork_state(
+                enabled=True,
+                hyperplan_enabled=is_hyperplan,
+            )
             logger.info(f"Ultrawork mode enabled (hyperplan: {is_hyperplan})")
             
             # Generate task_id if this is the start
-            if not self.task_id:
+            if not current_state.get('task_id'):
                 import uuid
-                self.task_id = f"ulw-task-{uuid.uuid4().hex[:12]}"
-                logger.debug(f"Generated task_id: {self.task_id}")
+                task_id = f"ulw-task-{uuid.uuid4().hex[:12]}"
+                set_ultrawork_state(task_id=task_id)
+                logger.debug(f"Generated task_id: {task_id}")
             
             # Inject protocol into context
             return MiddlewareResult(
@@ -166,7 +189,7 @@ class UltraworkMiddleware(ConversationMiddleware):
                 metadata={
                     'ultrawork_enabled': True,
                     'hyperplan_enabled': is_hyperplan,
-                    'task_id': self.task_id,
+                    'task_id': current_state.get('task_id'),
                 }
             )
         
@@ -196,9 +219,9 @@ class UltraworkModelMiddleware(ConversationMiddleware):
         """
         Override model selection for ultrawork mode.
         """
-        # Check if ultrawork is enabled in metadata
-        # This would be set by UltraworkMiddleware
-        ultrawork_enabled = context.stats.metadata.get('ultrawork_enabled', False)
+        # Use the module-level shared state
+        current_state = get_ultrawork_state()
+        ultrawork_enabled = current_state.get('enabled', False)
         
         if not ultrawork_enabled:
             return MiddlewareResult()

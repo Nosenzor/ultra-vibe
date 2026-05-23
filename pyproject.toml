@@ -56,7 +56,7 @@ test = [
 ]
 
 [project.scripts]
-ultra-vibe = "ultra_vibe.cli:main"
+ultra-vibe = "ultra_vibe.core.vibe_integration:cli_main"
 
 [project.urls]
 Homepage = "https://github.com/your-username/ultra-vibe"

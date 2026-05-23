@@ -94,9 +94,17 @@ def main():
     # Launch Vibe with remaining arguments
     from vibe.cli.entrypoint import main as vibe_main
     
-    # Reconstruct the command line without our flags
-    # But keep the prompt and other Vibe flags
-    sys.argv = ['vibe'] + remaining_args
+    # Build Vibe arguments
+    # If we have non-flag arguments, they are prompts and should use -p for programmatic mode
+    has_prompt = remaining_args and not any(arg.startswith('-') for arg in remaining_args)
+    
+    if has_prompt:
+        # Join all remaining args as the prompt and use -p for programmatic mode
+        prompt_text = ' '.join(remaining_args)
+        sys.argv = ['vibe', '-p', prompt_text]
+    else:
+        # Pass all args as-is (they might be Vibe flags)
+        sys.argv = ['vibe'] + remaining_args
     
     try:
         vibe_main()
